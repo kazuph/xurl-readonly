@@ -1,19 +1,19 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"bufio"
-	"mime/multipart"
-	"os"
-	"path/filepath"
 	"github.com/xdevplatform/xurl/auth"
 	"github.com/xdevplatform/xurl/config"
 	xurlErrors "github.com/xdevplatform/xurl/errors"
@@ -311,9 +311,10 @@ func (c *ApiClient) buildBaseRequest(method, endpoint string, body io.Reader, co
 	// Add authorization header if not already set
 	if req.Header.Get("Authorization") == "" {
 		authHeader, err := c.getAuthHeader(httpMethod, url, authType, username)
-		if err == nil {
-			req.Header.Add("Authorization", authHeader)
+		if err != nil {
+			return nil, err
 		}
+		req.Header.Add("Authorization", authHeader)
 	}
 
 	// Add common headers

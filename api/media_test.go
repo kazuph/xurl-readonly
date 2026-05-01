@@ -441,9 +441,12 @@ func TestExecuteMediaUpload(t *testing.T) {
 	}))
 	defer server.Close()
 
+	authMock, authTempDir := createMockAuth(t)
+	defer os.RemoveAll(authTempDir)
 	client := &ApiClient{
 		url:    server.URL,
 		client: &http.Client{Timeout: 30 * time.Second},
+		auth:   authMock,
 	}
 
 	tempFile, _ := createTempTestFile(t, 1024)
@@ -477,9 +480,12 @@ func TestExecuteMediaStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
+	authMock, authTempDir := createMockAuth(t)
+	defer os.RemoveAll(authTempDir)
 	client := &ApiClient{
 		url:    server.URL,
 		client: &http.Client{Timeout: 30 * time.Second},
+		auth:   authMock,
 	}
 
 	err := ExecuteMediaStatus("test_media_id", "oauth2", "testuser", false, false, false, []string{}, client)

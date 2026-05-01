@@ -284,7 +284,8 @@ func (a *Auth) RefreshOAuth2Token(username string) (string, error) {
 		ClientID:     a.clientID,
 		ClientSecret: a.clientSecret,
 		Endpoint: oauth2.Endpoint{
-			TokenURL: a.tokenURL,
+			TokenURL:  a.tokenURL,
+			AuthStyle: oauth2.AuthStyleInHeader,
 		},
 	}
 
@@ -310,7 +311,12 @@ func (a *Auth) RefreshOAuth2Token(username string) (string, error) {
 
 	expirationTime := uint64(time.Now().Add(time.Duration(newToken.Expiry.Unix()-time.Now().Unix()) * time.Second).Unix())
 
-	err = a.TokenStore.SaveOAuth2Token(usernameStr, newToken.AccessToken, newToken.RefreshToken, expirationTime)
+	refreshToken := newToken.RefreshToken
+	if refreshToken == "" {
+		refreshToken = token.OAuth2.RefreshToken
+	}
+
+	err = a.TokenStore.SaveOAuth2TokenForApp(a.appName, usernameStr, newToken.AccessToken, refreshToken, expirationTime)
 	if err != nil {
 		return "", xurlErrors.NewAuthError("RefreshTokenError", err)
 	}

@@ -57,6 +57,10 @@ func createMockAuth(t *testing.T) (*auth.Auth, string) {
 	if err != nil {
 		t.Fatalf("Failed to save bearer token: %v", err)
 	}
+	err = tokenStore.SaveOAuth2Token("testuser", "test-oauth2-token", "test-refresh-token", 9999999999)
+	if err != nil {
+		t.Fatalf("Failed to save OAuth2 token: %v", err)
+	}
 
 	mockAuth.WithTokenStore(tokenStore)
 	return mockAuth, tempDir
@@ -175,6 +179,27 @@ func TestBuildRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildRequestReturnsAuthHeaderErrors(t *testing.T) {
+	cfg := &config.Config{
+		APIBaseURL: "https://api.x.com",
+	}
+	a := auth.NewAuth(cfg)
+	tokenStore, tempDir := createTempTokenStore(t)
+	defer os.RemoveAll(tempDir)
+	a.WithTokenStore(tokenStore)
+	client := NewApiClient(cfg, a)
+
+	req, err := client.BuildRequest(RequestOptions{
+		Method:   "GET",
+		Endpoint: "/2/users/me",
+		AuthType: "app",
+	})
+
+	assert.Nil(t, req)
+	assert.Error(t, err)
+	assert.True(t, xurlErrors.IsAuthError(err), "Expected auth error")
 }
 
 func TestSendRequest(t *testing.T) {

@@ -31,9 +31,11 @@ func ExecuteStreamRequest(options RequestOptions, client Client) error {
 // handleRequestError processes API client errors in a consistent way
 func handleRequestError(clientErr error) error {
 	var rawJSON json.RawMessage
-	json.Unmarshal([]byte(clientErr.Error()), &rawJSON)
-	utils.FormatAndPrintResponse(rawJSON)
-	return fmt.Errorf("request failed")
+	if err := json.Unmarshal([]byte(clientErr.Error()), &rawJSON); err == nil && len(rawJSON) > 0 {
+		utils.FormatAndPrintResponse(rawJSON)
+		return fmt.Errorf("request failed")
+	}
+	return clientErr
 }
 
 // formatAndPrintResponse formats and prints API responses

@@ -1,9 +1,13 @@
 package auth
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -263,4 +267,49 @@ func TestGetOAuth2HeaderNoToken(t *testing.T) {
 	// Verify that looking up a nonexistent user returns nil
 	token := tokenStore.GetOAuth2Token("nobody")
 	assert.Nil(t, token)
+}
+
+func TestRefreshOAuth2TokenUsesBasicAuthAndPreservesRefreshToken(t *testing.T) {
+	tokenStore, tempDir := createTempTokenStore(t)
+	defer os.RemoveAll(tempDir)
+
+	tokenStore.Apps["default"].ClientID = "client-id"
+	tokenStore.Apps["default"].ClientSecret = "client-secret"
+	err := tokenStore.SaveOAuth2Token("alice", "expired-access", "existing-refresh", 1)
+	require.NoError(t, err)
+
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, secret, ok := r.BasicAuth()
+		require.True(t, ok, "refresh request must use HTTP Basic client auth")
+		assert.Equal(t, "client-id", id)
+		assert.Equal(t, "client-secret", secret)
+		assert.Equal(t, "refresh_token", r.FormValue("grant_type"))
+		assert.Equal(t, "existing-refresh", r.FormValue("refresh_token"))
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "new-access",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer tokenServer.Close()
+
+	cfg := &config.Config{
+		TokenURL: tokenServer.URL,
+	}
+	a := NewAuth(cfg).WithTokenStore(tokenStore)
+	a.clientID = "client-id"
+	a.clientSecret = "client-secret"
+
+	accessToken, err := a.RefreshOAuth2Token("alice")
+	require.NoError(t, err)
+	assert.Equal(t, "new-access", accessToken)
+
+	refreshed := tokenStore.GetOAuth2Token("alice")
+	require.NotNil(t, refreshed)
+	require.NotNil(t, refreshed.OAuth2)
+	assert.Equal(t, "new-access", refreshed.OAuth2.AccessToken)
+	assert.Equal(t, "existing-refresh", refreshed.OAuth2.RefreshToken)
+	assert.Greater(t, refreshed.OAuth2.ExpirationTime, uint64(time.Now().Unix()))
 }
